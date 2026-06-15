@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Club ORO — Construction Weather</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a18; min-height: 100vh; padding: 1.5rem; }
+  .container { max-width: 1020px; margin: 0 auto; }
+
+  header { margin-bottom: 1.25rem; }
+  header h1 { font-size: 19px; font-weight: 600; }
+  header p  { font-size: 12px; color: #888; margin-top: 3px; }
+
+  .loc-bar { background: #fff; border: 0.5px solid #ddd; border-radius: 10px; padding: 12px 16px; margin-bottom: 1.1rem; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .loc-bar .field { display: flex; flex-direction: column; gap: 4px; }
+  .loc-bar label { font-size: 11px; color: #888; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .loc-bar input[type="text"] { font-size: 14px; padding: 6px 10px; border: 0.5px solid #ccc; border-radius: 6px; width: 160px; }
+  .loc-bar input.wide { width: 210px; }
+  .loc-bar input:focus { outline: none; border-color: #555; }
+  .loc-bar button.go { padding: 6px 18px; font-size: 13px; font-weight: 500; background: #1a1a18; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .loc-bar button.go:hover { background: #333; }
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; padding-top: 8px; border-top: 0.5px solid #eee; align-items: center; }
+  .preset-row span { font-size: 11px; color: #aaa; }
+  .preset { background: #f0efe8; border: 0.5px solid #ddd; border-radius: 5px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+  .preset:hover { background: #e5e4dc; }
+
+  /* Day summary strip */
+  .day-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .day-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 8px; padding: 10px 14px; min-width: 120px; cursor: pointer; transition: border-color 0.15s; }
+  .day-card:hover { border-color: #aaa; }
+  .day-card.active { border: 1.5px solid #1a1a18; }
+  .day-card .dc-date { font-size: 11px; color: #888; margin-bottom: 3px; }
+  .day-card .dc-risk { font-size: 16px; font-weight: 600; }
+  .day-card .dc-label { font-size: 11px; margin-top: 2px; }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 0.85rem; }
+  .controls label { font-size: 12px; color: #666; }
+  select { font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 0.5px solid #ccc; background: #fff; cursor: pointer; }
+  .refresh-btn { margin-left: auto; background: #fff; border: 0.5px solid #ccc; border-radius: 6px; padding: 5px 14px; font-size: 12px; cursor: pointer; }
+  .refresh-btn:hover { background: #f0efe8; }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 0.85rem; font-size: 12px; align-items: center; color: #555; }
+  .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; background: #fff; border-radius: 10px; border: 0.5px solid #e0dfd8; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 580px; }
+  thead tr { border-bottom: 0.5px solid #e0dfd8; }
+  th { padding: 9px 10px; text-align: center; font-weight: 500; color: #888; font-size: 11px; white-space: nowrap; }
+  th:first-child { text-align: left; padding-left: 14px; }
+  td { padding: 8px 10px; text-align: center; border-bottom: 0.5px solid #f0efe8; vertical-align: middle; }
+  td:first-child { text-align: left; padding-left: 14px; color: #444; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf7; }
+  tr.now-row td { background: #fffdf0; }
+
+  .pct { font-size: 14px; font-weight: 600; }
+  .bar-wrap { height: 5px; background: #eee; border-radius: 3px; margin-top: 4px; }
+  .bar-fill { height: 5px; border-radius: 3px; }
+  .precip { font-size: 12px; color: #888; margin-top: 2px; }
+
+  /* Confidence badge */
+  .conf { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; white-space: nowrap; }
+  .conf-high   { background: #e8f5e8; color: #2e7d2e; }
+  .conf-med    { background: #fff8e1; color: #8a6000; }
+  .conf-low    { background: #fdecea; color: #b71c1c; }
+
+  /* Risk badge for day cards */
+  .risk-clear  { color: #2e7d2e; }
+  .risk-watch  { color: #8a6000; }
+  .risk-likely { color: #b71c1c; }
+
+  .status { text-align: center; padding: 3rem; color: #888; font-size: 14px; }
+  footer { margin-top: 1rem; font-size: 11px; color: #aaa; text-align: center; }
+
+  .model-hdr { font-size: 10px; color: #aaa; display: block; font-weight: 400; margin-top: 1px; }
+  .divider-col { border-left: 0.5px solid #eee; }
+
+  .temp-cell { font-size: 13px; color: #555; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>&#127959; Club ORO — Construction Rain Forecast</h1>
+    <p>2-hour buckets · ECMWF vs GFS models · Confidence indicator · Open-Meteo (free, no API key)</p>
+  </header>
+
+  <div class="loc-bar">
+    <div class="field">
+      <label>Location name</label>
+      <input type="text" id="locName" class="wide" value="Club ORO Resort & Spa" />
+    </div>
+    <div class="field">
+      <label>Latitude (°N)</label>
+      <input type="text" id="lat" value="29.8108233" />
+    </div>
+    <div class="field">
+      <label>Longitude (°E)</label>
+      <input type="text" id="lon" value="78.559849" />
+    </div>
+    <button class="go" onclick="loadWeather()">&#9656; Get Forecast</button>
+    <div class="preset-row">
+      <span>Quick:</span>
+      <button class="preset" onclick="setPreset('Club ORO Resort & Spa', 29.8108233, 78.559849)">Club ORO Site</button>
+      <button class="preset" onclick="setPreset('Dugadda, Uttarakhand', 29.9, 78.6)">Dugadda</button>
+      <button class="preset" onclick="setPreset('Lansdowne Town', 29.8405, 78.6826)">Lansdowne Town</button>
+      <button class="preset" onclick="setPreset('Kotdwara, Uttarakhand', 29.7491, 78.5218)">Kotdwara</button>
+    </div>
+  </div>
+
+  <!-- Day summary cards -->
+  <div class="day-strip" id="dayStrip">
+    <div class="day-card"><div class="dc-date">—</div><div class="dc-risk">—</div><div class="dc-label" style="color:#aaa;">loading…</div></div>
+  </div>
+
+  <div class="legend">
+    <strong>Rain probability:</strong>
+    <span><span class="dot" style="background:#4caf50;"></span>&lt;20% — No disruption expected</span>
+    <span><span class="dot" style="background:#ff9800;"></span>20–59% — Plan with caution</span>
+    <span><span class="dot" style="background:#e53935;"></span>≥60% — Disruption likely</span>
+    <span style="margin-left:8px;"><span class="conf" style="background:#e8f5e8;color:#2e7d2e;">✓ High confidence</span> Both models agree</span>
+    <span><span class="conf" style="background:#fff8e1;color:#8a6000;">~ Moderate</span> Models differ &lt;25%</span>
+    <span><span class="conf" style="background:#fdecea;color:#b71c1c;">? Low</span> Models diverge ≥25%</span>
+  </div>
+
+  <div class="controls">
+    <label>Hours:</label>
+    <select id="hourFilter" onchange="renderTable()">
+      <option value="all">All hours</option>
+      <option value="work" selected>Working hours (6am–6pm)</option>
+      <option value="night">Night (6pm–6am)</option>
+    </select>
+    <button class="refresh-btn" onclick="loadWeather()">&#8635; Refresh</button>
+    <span id="lastLoaded" style="font-size:11px;color:#aaa;margin-left:4px;"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left;padding-left:14px;">2-hr Window</th>
+          <th>Temp</th>
+          <th class="divider-col">ECMWF<span class="model-hdr">prob · mm</span></th>
+          <th class="divider-col">GFS<span class="model-hdr">prob · mm</span></th>
+          <th class="divider-col">Confidence</th>
+          <th>Construction<span class="model-hdr">Impact</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="6" class="status">Enter coordinates and click Get Forecast.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Data: <a href="https://open-meteo.com" target="_blank">open-meteo.com</a> — ECMWF IFS &amp; NOAA GFS global models, updated every ~6h.
+    Elevation fetched automatically. Open this file locally in Chrome or Edge.
+  </footer>
+</div>
+
+<script>
+let ecmwfData = [], gfsData = [], selectedDay = 0;
+
+function rainColor(p) {
+  return p >= 60 ? '#e53935' : p >= 20 ? '#ff9800' : '#4caf50';
+}
+function rainBg(p) {
+  return p >= 60 ? '#fff0f0' : p >= 20 ? '#fffbf0' : '#f2fbf2';
+}
+function impactText(p) {
+  if (p >= 60) return '🚫 Stop work';
+  if (p >= 40) return '⚠️ High risk';
+  if (p >= 20) return '⚡ Monitor';
+  return '✅ Clear';
+}
+function impactColor(p) {
+  return p >= 60 ? '#b71c1c' : p >= 40 ? '#e65100' : p >= 20 ? '#8a6000' : '#2e7d2e';
+}
+
+function confBadge(diff) {
+  if (diff < 15)  return '<span class="conf conf-high">✓ High</span>';
+  if (diff < 25)  return '<span class="conf conf-med">~ Moderate</span>';
+  return '<span class="conf conf-low">? Low</span>';
+}
+
+function setPreset(name, lat, lon) {
+  document.getElementById('locName').value = name;
+  document.getElementById('lat').value = lat;
+  document.getElementById('lon').value = lon;
+  loadWeather();
+}
+
+async function fetchModel(lat, lon, model) {
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=' + lat + '&longitude=' + lon
+    + '&hourly=temperature_2m,precipitation_probability,precipitation'
+    + '&models=' + model
+    + '&forecast_days=5&timezone=Asia%2FKolkata';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(model + ' returned HTTP ' + res.status);
+  const j = await res.json();
+  return j.hourly.time.map((t, i) => ({
+    time:     new Date(t),
+    temp:     j.hourly.temperature_2m[i],
+    rainProb: j.hourly.precipitation_probability[i] ?? 0,
+    precip:   j.hourly.precipitation[i] ?? 0
+  }));
+}
+
+async function loadWeather() {
+  const name = document.getElementById('locName').value.trim() || 'Site';
+  const lat  = parseFloat(document.getElementById('lat').value);
+  const lon  = parseFloat(document.getElementById('lon').value);
+
+  if (isNaN(lat) || isNaN(lon)) {
+    document.getElementById('tbody').innerHTML =
+      '<tr><td colspan="8" class="status" style="color:#e53935;">⚠ Invalid coordinates.</td></tr>';
+    return;
+  }
+
+  document.getElementById('tbody').innerHTML =
+    '<tr><td colspan="6" class="status">Fetching ECMWF + GFS for ' + name + '…</td></tr>';
+  document.getElementById('dayStrip').innerHTML =
+    '<div class="day-card"><div class="dc-date">—</div><div class="dc-risk">—</div><div class="dc-label" style="color:#aaa;">loading…</div></div>';
+
+  try {
+    const [ecmwf, gfs, elevRes] = await Promise.all([
+      fetchModel(lat, lon, 'ecmwf_ifs025'),
+      fetchModel(lat, lon, 'gfs_seamless'),
+      fetch('https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon)
+    ]);
+    ecmwfData = ecmwf;
+    gfsData   = gfs;
+
+    const elevJson = await elevRes.json();
+    const elev = elevJson.elevation ? Math.round(elevJson.elevation[0]) + 'm' : '?';
+    document.querySelector('header p').textContent =
+      '2-hour buckets · ECMWF vs GFS · ' + name + ' · ' + lat.toFixed(4) + '°N, ' + lon.toFixed(4) + '°E · Elevation: ' + elev;
+
+    buildDayStrip();
+    renderTable();
+    document.getElementById('lastLoaded').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+  } catch(e) {
+    document.getElementById('tbody').innerHTML =
+      '<tr><td colspan="6" class="status" style="color:#e53935;">'
+      + '⚠ Failed: <strong>' + e.message + '</strong><br>'
+      + '<small style="color:#aaa">Open this file directly in Chrome or Edge. Ensure internet connection.</small>'
+      + '</td></tr>';
+  }
+}
+
+// Aggregate hourly → 2-hr buckets for a given day
+function get2hrBuckets(dayStr, data) {
+  const dayRows = data.filter(d => d.time.toDateString() === dayStr);
+  const buckets = [];
+  for (let i = 0; i < dayRows.length; i += 2) {
+    const a = dayRows[i], b = dayRows[i + 1] || a;
+    buckets.push({
+      time:     a.time,
+      temp:     (a.temp + b.temp) / 2,
+      rainProb: Math.max(a.rainProb, b.rainProb), // worst-case in window
+      precip:   a.precip + b.precip
+    });
+  }
+  return buckets;
+}
+
+function buildDayStrip() {
+  const days = [...new Set(ecmwfData.map(d => d.time.toDateString()))];
+  const strip = document.getElementById('dayStrip');
+  strip.innerHTML = '';
+  days.forEach((ds, i) => {
+    const dt = new Date(ds);
+    const label = i === 0 ? 'Today'
+      : dt.toLocaleDateString('en-IN', {weekday:'short', day:'numeric', month:'short'});
+
+    // Max rain prob (ECMWF + GFS average) for working hours
+    const eb = get2hrBuckets(ds, ecmwfData).filter(r => r.time.getHours() >= 6 && r.time.getHours() < 18);
+    const gb = get2hrBuckets(ds, gfsData).filter(r => r.time.getHours() >= 6 && r.time.getHours() < 18);
+    const maxProb = eb.length
+      ? Math.round(Math.max(...eb.map((r, j) => (r.rainProb + (gb[j] ? gb[j].rainProb : r.rainProb)) / 2)))
+      : 0;
+
+    const riskClass = maxProb >= 60 ? 'risk-likely' : maxProb >= 20 ? 'risk-watch' : 'risk-clear';
+    const riskLabel = maxProb >= 60 ? 'Disruption likely' : maxProb >= 20 ? 'Plan with caution' : 'Clear to work';
+
+    const card = document.createElement('div');
+    card.className = 'day-card' + (i === 0 ? ' active' : '');
+    card.innerHTML = '<div class="dc-date">' + label + '</div>'
+      + '<div class="dc-risk ' + riskClass + '">' + maxProb + '%</div>'
+      + '<div class="dc-label ' + riskClass + '">' + riskLabel + '</div>';
+    card.onclick = () => {
+      selectedDay = i;
+      document.querySelectorAll('.day-card').forEach((x, j) => x.classList.toggle('active', j === i));
+      renderTable();
+    };
+    strip.appendChild(card);
+  });
+}
+
+function renderTable() {
+  const days = [...new Set(ecmwfData.map(d => d.time.toDateString()))];
+  const target = days[selectedDay];
+  const filter = document.getElementById('hourFilter').value;
+
+  let eBuckets = get2hrBuckets(target, ecmwfData);
+  let gBuckets = get2hrBuckets(target, gfsData);
+
+  if (filter === 'work') {
+    eBuckets = eBuckets.filter(r => r.time.getHours() >= 6 && r.time.getHours() < 18);
+    gBuckets = gBuckets.filter(r => r.time.getHours() >= 6 && r.time.getHours() < 18);
+  } else if (filter === 'night') {
+    eBuckets = eBuckets.filter(r => r.time.getHours() < 6 || r.time.getHours() >= 18);
+    gBuckets = gBuckets.filter(r => r.time.getHours() < 6 || r.time.getHours() >= 18);
+  }
+
+  if (!eBuckets.length) {
+    document.getElementById('tbody').innerHTML =
+      '<tr><td colspan="6" class="status">No data for this filter.</td></tr>';
+    return;
+  }
+
+  const now = new Date();
+  document.getElementById('tbody').innerHTML = eBuckets.map((e, idx) => {
+    const g = gBuckets[idx] || e;
+    const startH = e.time.getHours();
+    const endH   = (startH + 2) % 24;
+    const fmt = h => (h % 12 || 12) + (h < 12 ? 'am' : 'pm');
+    const windowStr = fmt(startH) + '–' + fmt(endH);
+
+    const ep = Math.round(e.rainProb);
+    const gp = Math.round(g.rainProb);
+    const avgP = Math.round((ep + gp) / 2);
+    const diff = Math.abs(ep - gp);
+
+    const isNow = e.time <= now && now < new Date(e.time.getTime() + 7200000);
+
+    function modelCell(p, mm) {
+      const barW = Math.round(p * 0.7);
+      return '<td style="border-left:0.5px solid #eee;background:' + rainBg(p) + ';">'
+        + '<div class="pct" style="color:' + rainColor(p) + ';">' + p + '%</div>'
+        + '<div class="bar-wrap"><div class="bar-fill" style="width:' + barW + 'px;background:' + rainColor(p) + ';"></div></div>'
+        + '<div class="precip">' + mm.toFixed(1) + ' mm</div>'
+        + '</td>';
+    }
+
+    return '<tr class="' + (isNow ? 'now-row' : '') + '">'
+      + '<td>' + windowStr + (isNow ? ' <span style="font-size:10px;font-weight:700;color:#ff9800;">NOW</span>' : '') + '</td>'
+      + '<td class="temp-cell">' + Math.round(e.temp) + '°C</td>'
+      + modelCell(ep, e.precip)
+      + modelCell(gp, g.precip)
+      + '<td style="border-left:0.5px solid #eee;">' + confBadge(diff) + '<div style="font-size:10px;color:#aaa;margin-top:3px;">±' + diff + '%</div></td>'
+      + '<td style="color:' + impactColor(avgP) + ';font-weight:600;font-size:13px;">' + impactText(avgP) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+loadWeather();
+</script>
+</body>
+</html>
